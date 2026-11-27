@@ -1,0 +1,15 @@
+{
+  "name": "canho-com-monorepo",
+  "version": "2.0.0",
+  "private": true,
+  "description": "canho.com - Đẳng cấp tạo nên thương hiệu | Hệ thống Quản lý Cho thuê & Vận hành Căn hộ Multi-Tenant",
+  "scripts": {
+    "install:all": "npm --prefix server install && npm --prefix client install",
+    "dev:server": "npm --prefix server run dev",
+    "dev:client": "npm --prefix client run dev",
+    "build:client": "npm --prefix client run build",
+    "db:init": "npm --prefix server run db:init",
+    "db:seed": "npm --prefix server run db:seed",
+    "test:server": "npm --prefix server test"
+  }
+}

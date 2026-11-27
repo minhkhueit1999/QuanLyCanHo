@@ -1,0 +1,25 @@
+{
+  "name": "canho-com-server",
+  "version": "2.0.0",
+  "description": "canho.com Backend API - Multi-Tenant, RBAC, Decimal128, ACID Transactions & Scheduler",
+  "type": "module",
+  "main": "src/server.js",
+  "scripts": {
+    "start": "node src/server.js",
+    "dev": "nodemon src/server.js",
+    "db:init": "node src/scripts/seed.js --init-only",
+    "db:seed": "node src/scripts/seed.js",
+    "test": "node tests/canhoMultiTenant.test.js"
+  },
+  "dependencies": {
+    "bcryptjs": "^2.4.3",
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.7",
+    "express": "^4.21.2",
+    "jsonwebtoken": "^9.0.2",
+    "mongoose": "^8.9.5"
+  },
+  "devDependencies": {
+    "nodemon": "^3.1.9"
+  }
+}

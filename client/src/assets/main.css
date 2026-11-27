@@ -1,0 +1,142 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --color-primary: #A6342E;
+  --color-primary-hover: #872621;
+  --color-canvas: #F7F4EE;
+  --color-surface: #FFFFFF;
+  --color-surface-alt: #EFE9DE;
+  --color-ink: #24120E;
+  --color-muted: #6E5A4F;
+  --color-hairline: #E6DDD0;
+  --color-accent-1: #3A251D;
+  --color-accent-2: #C69C49;
+  --color-status-available: #1F6E5A;
+  --color-status-occupied: #A6342E;
+  --color-status-reserved: #B45309;
+  --shadow-canho: rgba(36, 18, 14, 0.14) 0px 2px 8px 0px;
+}
+
+@layer base {
+  html {
+    font-family: 'Be Vietnam Pro', system-ui, sans-serif;
+    background-color: #F7F4EE;
+    color: #24120E;
+    font-size: 14px;
+    line-height: 1.43;
+  }
+
+  h1, h2, h3, .font-brand {
+    font-family: 'Noto Serif', Georgia, serif;
+    letter-spacing: 0px;
+  }
+
+  *:focus-visible {
+    outline: 2px solid #C69C49;
+    outline-offset: 2px;
+  }
+}
+
+@layer components {
+  .container-canho {
+    @apply mx-auto w-full max-w-[1108px] px-4 lg:px-0;
+  }
+
+  .card-canho {
+    @apply relative rounded-xs border border-hairline bg-surface shadow-canho;
+  }
+
+  .card-gold {
+    @apply relative rounded-xs border border-gold/60 bg-surface shadow-canho;
+  }
+
+  /* Subtle Neo-Chinese Lattice Corner Accents */
+  .neo-lattice {
+    position: relative;
+  }
+
+  .neo-lattice::before,
+  .neo-lattice::after {
+    content: '';
+    position: absolute;
+    width: 12px;
+    height: 12px;
+    pointer-events: none;
+    z-index: 1;
+  }
+
+  .neo-lattice::before {
+    top: 6px;
+    left: 6px;
+    border-top: 1.5px solid #C69C49;
+    border-left: 1.5px solid #C69C49;
+  }
+
+  .neo-lattice::after {
+    bottom: 6px;
+    right: 6px;
+    border-bottom: 1.5px solid #C69C49;
+    border-right: 1.5px solid #C69C49;
+  }
+
+  /* Wood Header / Hero Background with Subtle Imperial Lattice */
+  .wood-lattice-bg {
+    background-color: #24120E;
+    background-image:
+      linear-gradient(90deg, rgba(198, 156, 73, 0.08) 1px, transparent 1px),
+      linear-gradient(rgba(198, 156, 73, 0.08) 1px, transparent 1px),
+      radial-gradient(circle at 18% 20%, rgba(166, 52, 46, 0.35) 0%, transparent 55%),
+      radial-gradient(circle at 85% 85%, rgba(198, 156, 73, 0.16) 0%, transparent 50%);
+    background-size: 32px 32px, 32px 32px, 100% 100%, 100% 100%;
+  }
+
+  .btn-primary-pill {
+    @apply inline-flex items-center justify-center gap-2 rounded-full bg-primary px-5 py-2.5 text-sm font-medium text-white transition-colors duration-150 hover:bg-primary-hover disabled:cursor-not-allowed disabled:opacity-50 cursor-pointer;
+  }
+
+  .btn-secondary-pill {
+    @apply inline-flex items-center justify-center gap-2 rounded-full border border-hairline bg-surface px-4 py-2 text-sm font-medium text-ink transition-colors duration-150 hover:border-gold hover:bg-surface-alt disabled:cursor-not-allowed disabled:opacity-50 cursor-pointer;
+  }
+
+  .btn-gold-pill {
+    @apply inline-flex items-center justify-center gap-2 rounded-full border border-gold bg-gold-tint px-4 py-2 text-sm font-medium text-ink transition-colors duration-150 hover:bg-gold hover:text-white disabled:cursor-not-allowed disabled:opacity-50 cursor-pointer;
+  }
+
+  .input-canho {
+    @apply w-full rounded-xs border border-hairline bg-surface px-3.5 py-2 text-sm text-ink placeholder:text-neutral-1 transition-colors focus:border-gold focus:outline-none focus:ring-2 focus:ring-gold/40;
+  }
+
+  .seal-badge {
+    @apply inline-flex items-center justify-center rounded-xs border-2 border-primary px-3 py-1 font-serif text-xs font-bold tracking-wider text-primary;
+  }
+}
+
+.tabular-nums {
+  font-variant-numeric: tabular-nums;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+@media print {
+  body {
+    background: #ffffff !important;
+  }
+  .no-print {
+    display: none !important;
+  }
+  .printable-document {
+    box-shadow: none !important;
+    border: 1px solid #d1d5db !important;
+    margin: 0 !important;
+    width: 100% !important;
+    max-width: 100% !important;
+  }
+}
