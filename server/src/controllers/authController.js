@@ -44,8 +44,34 @@ function hashVerificationToken(rawToken) {
   return crypto.createHash('sha256').update(String(rawToken)).digest('hex');
 }
 
-function buildVerificationUrl(rawToken, email) {
-  const clientBase = (process.env.CLIENT_URL || 'http://localhost:5173').split(',')[0].trim();
+function resolveClientBaseUrl(req) {
+  const configured = (process.env.CLIENT_URL || '').split(',')[0].trim();
+  if (configured) return configured.replace(/\/+$/, '');
+
+  const origin = String(req?.headers?.origin || '').trim();
+  if (origin && /^https?:\/\//i.test(origin)) {
+    return origin.replace(/\/+$/, '');
+  }
+
+  const forwardedHost = String(req?.headers?.['x-forwarded-host'] || '').split(',')[0].trim();
+  if (forwardedHost) {
+    const proto = String(req?.headers?.['x-forwarded-proto'] || req?.protocol || 'https')
+      .split(',')[0]
+      .trim();
+    return `${proto}://${forwardedHost}`;
+  }
+
+  const vercelHost =
+    process.env.VERCEL_PROJECT_PRODUCTION_URL || process.env.VERCEL_URL || '';
+  if (vercelHost) {
+    return `https://${String(vercelHost).trim()}`;
+  }
+
+  return 'http://localhost:5173';
+}
+
+function buildVerificationUrl(rawToken, email, req) {
+  const clientBase = resolveClientBaseUrl(req);
   return `${clientBase}/verify-email?token=${encodeURIComponent(rawToken)}&email=${encodeURIComponent(
     email
   )}`;
@@ -138,7 +164,7 @@ export const register = asyncHandler(async (req, res) => {
     verificationLastSentAt: now,
   });
 
-  const verificationUrl = buildVerificationUrl(rawToken, normalizedEmail);
+  const verificationUrl = buildVerificationUrl(rawToken, normalizedEmail, req);
   if (process.env.NODE_ENV !== 'test') {
     console.log(`[Email Verification] ${normalizedEmail} -> ${verificationUrl}`);
   }
@@ -241,7 +267,7 @@ export const resendVerification = asyncHandler(async (req, res) => {
   user.verificationLastSentAt = now;
   await user.save();
 
-  const verificationUrl = buildVerificationUrl(rawToken, normalizedEmail);
+  const verificationUrl = buildVerificationUrl(rawToken, normalizedEmail, req);
   if (process.env.NODE_ENV !== 'test') {
     console.log(`[Resend Verification] ${normalizedEmail} -> ${verificationUrl}`);
   }

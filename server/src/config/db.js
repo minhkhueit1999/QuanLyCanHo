@@ -1,39 +1,63 @@
 import mongoose from 'mongoose';
 
 let cachedSupportsTransactions = null;
+let listenersAttached = false;
+let pendingConnectPromise = null;
 
 /**
  * Connect to MongoDB using Mongoose 8+ configuration.
- * Also detects whether the cluster supports multi-document ACID transactions.
- * @param {string} uri
+ * Safe for both long-running Node servers and Vercel Serverless Functions:
+ * reuses an active connection and deduplicates concurrent cold-start connects.
+ * @param {string} [uri]
  */
-export async function connectDB(uri) {
+export async function connectDB(uri = process.env.MONGODB_URI) {
+  if (mongoose.connection.readyState === 1) {
+    await detectTransactionSupport();
+    return mongoose.connection;
+  }
+
+  if (pendingConnectPromise) {
+    return pendingConnectPromise;
+  }
+
   if (!uri) {
     throw new Error('MONGODB_URI is required to connect to MongoDB');
   }
 
   mongoose.set('strictQuery', true);
 
-  mongoose.connection.on('error', (err) => {
-    console.error('[MongoDB] Connection error:', err.message);
-  });
+  if (!listenersAttached) {
+    listenersAttached = true;
+    mongoose.connection.on('error', (err) => {
+      console.error('[MongoDB] Connection error:', err.message);
+    });
 
-  mongoose.connection.on('disconnected', () => {
-    cachedSupportsTransactions = null;
-    console.warn('[MongoDB] Disconnected from database');
-  });
+    mongoose.connection.on('disconnected', () => {
+      cachedSupportsTransactions = null;
+      console.warn('[MongoDB] Disconnected from database');
+    });
+  }
 
-  const conn = await mongoose.connect(uri, {
-    autoIndex: true,
-  });
+  pendingConnectPromise = mongoose
+    .connect(uri, {
+      autoIndex: true,
+    })
+    .then(async (conn) => {
+      await detectTransactionSupport();
+      if (process.env.NODE_ENV !== 'test') {
+        console.log(
+          `[MongoDB] Connected: ${conn.connection.host}/${conn.connection.name} (Transactions: ${
+            cachedSupportsTransactions ? 'REPLICA_SET_ACID' : 'STANDALONE_ATOMIC'
+          })`
+        );
+      }
+      return conn.connection;
+    })
+    .finally(() => {
+      pendingConnectPromise = null;
+    });
 
-  await detectTransactionSupport();
-  console.log(
-    `[MongoDB] Connected: ${conn.connection.host}/${conn.connection.name} (Transactions: ${
-      cachedSupportsTransactions ? 'REPLICA_SET_ACID' : 'STANDALONE_ATOMIC'
-    })`
-  );
-  return conn;
+  return pendingConnectPromise;
 }
 
 /**
