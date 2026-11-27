@@ -18,12 +18,6 @@ const routes = [
     meta: { guestOnly: true, title: 'Đăng ký Người dùng • canho.com' },
   },
   {
-    path: '/verify-email',
-    name: 'verify-email',
-    component: () => import('@/views/VerifyEmailView.vue'),
-    meta: { title: 'Xác nhận Email • canho.com' },
-  },
-  {
     path: '/',
     component: PublicLayout,
     children: [

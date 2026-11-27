@@ -2,13 +2,7 @@ import express from 'express';
 import { authenticate, optionalAuth, requireRoles, requireAdminSubRole } from '../middlewares/auth.js';
 import { buildingScopeGuard } from '../middlewares/buildingScope.js';
 
-import {
-  register,
-  login,
-  verifyEmail,
-  resendVerification,
-  getMe,
-} from '../controllers/authController.js';
+import { register, login, getMe } from '../controllers/authController.js';
 import { getDivisions } from '../controllers/divisionController.js';
 import { exploreRooms, getExploreRoomDetail } from '../controllers/exploreController.js';
 import {
@@ -103,12 +97,9 @@ import {
 
 const router = express.Router();
 
-// Auth (Public register strictly role:'user' + email verification link)
+// Auth (Public register strictly role:'user', direct activation without email verification/OTP)
 router.post('/auth/register', register);
 router.post('/auth/login', login);
-router.get('/auth/verify-email', verifyEmail);
-router.post('/auth/verify-email', verifyEmail);
-router.post('/auth/resend-verification', resendVerification);
 router.get('/auth/me', authenticate, getMe);
 
 // 34 Provinces / Wards & Public Explore

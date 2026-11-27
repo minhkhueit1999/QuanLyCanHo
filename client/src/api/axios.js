@@ -35,9 +35,7 @@ api.interceptors.response.use(
     if (
       status === 401 &&
       !url.includes('/auth/login') &&
-      !url.includes('/auth/register') &&
-      !url.includes('/auth/verify-email') &&
-      !url.includes('/auth/resend-verification')
+      !url.includes('/auth/register')
     ) {
       localStorage.removeItem('canho_token');
       localStorage.removeItem('canho_user');

@@ -43,7 +43,7 @@ export const useAuthStore = defineStore('auth', () => {
   }
 
   /**
-   * Public registration only creates role:'user' and sends email verification link (no OTP).
+   * Public registration only creates role:'user' without OTP or email verification.
    */
   async function register(payload) {
     useWorkspaceStore().clearWorkspace();
@@ -53,19 +53,8 @@ export const useAuthStore = defineStore('auth', () => {
       phone: payload.phone,
       password: payload.password,
     });
-    return res.data;
-  }
-
-  async function verifyEmail(rawToken) {
-    useWorkspaceStore().clearWorkspace();
-    const res = await api.post('/auth/verify-email', { token: rawToken });
     const { token: t, user: u, buildings } = res.data.data;
     setSession(t, u, buildings);
-    return res.data;
-  }
-
-  async function resendVerification(email) {
-    const res = await api.post('/auth/resend-verification', { email });
     return res.data;
   }
 
@@ -115,8 +104,6 @@ export const useAuthStore = defineStore('auth', () => {
     isStaff,
     login,
     register,
-    verifyEmail,
-    resendVerification,
     fetchMe,
     logout,
   };

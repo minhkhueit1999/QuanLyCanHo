@@ -1,14 +1,9 @@
-import crypto from 'node:crypto';
 import mongoose from 'mongoose';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import User from '../models/User.js';
 import Building from '../models/Building.js';
-import { sendVerificationEmail } from '../services/emailService.js';
 import { AppError, asyncHandler } from '../middlewares/errorHandler.js';
-
-const VERIFY_TTL_MINUTES = Number(process.env.EMAIL_VERIFY_TTL_MINUTES) || 30;
-const RESEND_COOLDOWN_MS = 60 * 1000;
 
 function signToken(user) {
   return jwt.sign(
@@ -41,43 +36,6 @@ function sanitizeUser(user) {
   };
 }
 
-function hashVerificationToken(rawToken) {
-  return crypto.createHash('sha256').update(String(rawToken)).digest('hex');
-}
-
-function resolveClientBaseUrl(req) {
-  const configured = (process.env.CLIENT_URL || '').split(',')[0].trim();
-  if (configured) return configured.replace(/\/+$/, '');
-
-  const origin = String(req?.headers?.origin || '').trim();
-  if (origin && /^https?:\/\//i.test(origin)) {
-    return origin.replace(/\/+$/, '');
-  }
-
-  const forwardedHost = String(req?.headers?.['x-forwarded-host'] || '').split(',')[0].trim();
-  if (forwardedHost) {
-    const proto = String(req?.headers?.['x-forwarded-proto'] || req?.protocol || 'https')
-      .split(',')[0]
-      .trim();
-    return `${proto}://${forwardedHost}`;
-  }
-
-  const vercelHost =
-    process.env.VERCEL_PROJECT_PRODUCTION_URL || process.env.VERCEL_URL || '';
-  if (vercelHost) {
-    return `https://${String(vercelHost).trim()}`;
-  }
-
-  return 'http://localhost:5173';
-}
-
-function buildVerificationUrl(rawToken, email, req) {
-  const clientBase = resolveClientBaseUrl(req);
-  return `${clientBase}/verify-email?token=${encodeURIComponent(rawToken)}&email=${encodeURIComponent(
-    email
-  )}`;
-}
-
 async function fetchAccessibleBuildings(user) {
   if (user.role === 'user') return [];
   const filter = { tenantId: user.tenantId };
@@ -95,7 +53,7 @@ async function fetchAccessibleBuildings(user) {
  * POST /api/v1/auth/register
  * Public registration is strictly restricted to standard users (role: 'user', userStatus: 'guest').
  * Blocks any attempt to inject role, subRole, tenantId, or assignedBuildings/assigned_building_ids.
- * Issues a SHA-256 email verification link (30 min TTL, no OTP).
+ * Activates immediately and issues a session JWT without requiring OTP or email verification.
  */
 export const register = asyncHandler(async (req, res) => {
   const {
@@ -141,10 +99,7 @@ export const register = asyncHandler(async (req, res) => {
   }
 
   const hashedPassword = await bcrypt.hash(String(password), 10);
-  const rawToken = crypto.randomBytes(32).toString('hex');
-  const tokenHash = hashVerificationToken(rawToken);
   const now = new Date();
-  const expiresAt = new Date(now.getTime() + VERIFY_TTL_MINUTES * 60 * 1000);
 
   const user = await User.create({
     _id: new mongoose.Types.ObjectId(),
@@ -158,141 +113,19 @@ export const register = asyncHandler(async (req, res) => {
     userStatus: 'guest',
     tenantId: null,
     assignedBuildings: [],
-    isEmailVerified: false,
-    emailVerifiedAt: null,
-    verificationTokenHash: tokenHash,
-    verificationExpiresAt: expiresAt,
-    verificationLastSentAt: now,
+    isEmailVerified: true,
+    emailVerifiedAt: now,
   });
 
-  const verificationUrl = buildVerificationUrl(rawToken, normalizedEmail, req);
-  try {
-    await sendVerificationEmail({
-      to: normalizedEmail,
-      fullName: user.fullName,
-      verificationUrl,
-      expiresMinutes: VERIFY_TTL_MINUTES,
-    });
-  } catch (emailErr) {
-    await User.deleteOne({ _id: user._id });
-    throw emailErr;
-  }
+  const token = signToken(user);
 
   res.status(201).json({
     success: true,
-    message:
-      'Đăng ký thành công! Vui lòng kiểm tra email và bấm vào link kích hoạt (hiệu lực 30 phút).',
-    data: {
-      user: sanitizeUser(user.toObject()),
-      requiresEmailVerification: true,
-      expiresAt,
-      cooldownSeconds: 60,
-      ...(process.env.NODE_ENV !== 'production'
-        ? { devVerificationUrl: verificationUrl, devVerificationToken: rawToken }
-        : {}),
-    },
-  });
-});
-
-/**
- * GET / POST /api/v1/auth/verify-email
- * Activates user account using raw verification token matched against SHA-256 hash.
- */
-export const verifyEmail = asyncHandler(async (req, res) => {
-  const rawToken = req.query.token || req.body?.token;
-  if (!rawToken || !String(rawToken).trim()) {
-    throw new AppError('Thiếu mã xác nhận email (token)', 400);
-  }
-
-  const tokenHash = hashVerificationToken(String(rawToken).trim());
-  const user = await User.findOne({ verificationTokenHash: tokenHash }).select(
-    '+verificationTokenHash +verificationExpiresAt'
-  );
-
-  if (!user) {
-    throw new AppError('Link kích hoạt không hợp lệ hoặc đã được sử dụng', 400);
-  }
-
-  if (!user.verificationExpiresAt || user.verificationExpiresAt < new Date()) {
-    throw new AppError('Link kích hoạt đã hết hạn (quá 30 phút). Vui lòng gửi lại link mới.', 400);
-  }
-
-  user.isEmailVerified = true;
-  user.emailVerifiedAt = new Date();
-  user.verificationTokenHash = null;
-  user.verificationExpiresAt = null;
-  await user.save();
-
-  const plainUser = user.toObject();
-  const token = signToken(user);
-
-  res.status(200).json({
-    success: true,
-    message: 'Xác nhận email thành công! Tài khoản canho.com của bạn đã được kích hoạt.',
+    message: 'Đăng ký tài khoản Khách thuê thành công!',
     data: {
       token,
-      user: sanitizeUser(plainUser),
+      user: sanitizeUser(user.toObject()),
       buildings: [],
-    },
-  });
-});
-
-/**
- * POST /api/v1/auth/resend-verification
- * Resends activation link with strict 60-second cooldown per account.
- */
-export const resendVerification = asyncHandler(async (req, res) => {
-  const { email } = req.body;
-  if (!email || !String(email).trim()) {
-    throw new AppError('Vui lòng nhập email cần gửi lại link kích hoạt', 400);
-  }
-
-  const normalizedEmail = String(email).toLowerCase().trim();
-  const user = await User.findOne({ email: normalizedEmail });
-
-  if (!user) {
-    throw new AppError('Không tìm thấy tài khoản với email này', 404);
-  }
-  if (user.isEmailVerified) {
-    throw new AppError('Tài khoản này đã xác nhận email trước đó', 400);
-  }
-
-  const now = new Date();
-  if (user.verificationLastSentAt) {
-    const elapsedMs = now.getTime() - new Date(user.verificationLastSentAt).getTime();
-    if (elapsedMs < RESEND_COOLDOWN_MS) {
-      const waitSeconds = Math.ceil((RESEND_COOLDOWN_MS - elapsedMs) / 1000);
-      return res.status(429).json({
-        success: false,
-        message: `Vui lòng đợi ${waitSeconds} giây trước khi gửi lại link kích hoạt`,
-        retryAfterSeconds: waitSeconds,
-      });
-    }
-  }
-
-  const rawToken = crypto.randomBytes(32).toString('hex');
-  const verificationUrl = buildVerificationUrl(rawToken, normalizedEmail, req);
-
-  await sendVerificationEmail({
-    to: normalizedEmail,
-    fullName: user.fullName,
-    verificationUrl,
-    expiresMinutes: VERIFY_TTL_MINUTES,
-  });
-
-  user.verificationTokenHash = hashVerificationToken(rawToken);
-  user.verificationExpiresAt = new Date(now.getTime() + VERIFY_TTL_MINUTES * 60 * 1000);
-  user.verificationLastSentAt = now;
-  await user.save();
-
-  res.status(200).json({
-    success: true,
-    message: 'Đã gửi lại link kích hoạt vào email của bạn (hiệu lực 30 phút).',
-    data: {
-      cooldownSeconds: 60,
-      ...(process.env.NODE_ENV !== 'production'
-        ? { devVerificationUrl: verificationUrl, devVerificationToken: rawToken }
-        : {}),
     },
   });
 });
@@ -317,15 +150,6 @@ export const login = asyncHandler(async (req, res) => {
   const valid = await bcrypt.compare(String(password), user.password);
   if (!valid) {
     throw new AppError('Email hoặc mật khẩu không chính xác', 401);
-  }
-
-  if (user.role === 'user' && !user.isEmailVerified) {
-    return res.status(403).json({
-      success: false,
-      code: 'EMAIL_NOT_VERIFIED',
-      message:
-        'Tài khoản chưa xác nhận email. Vui lòng kiểm tra hộp thư hoặc gửi lại link kích hoạt.',
-    });
   }
 
   const plainUser = user.toObject();
