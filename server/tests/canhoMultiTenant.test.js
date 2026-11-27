@@ -8,6 +8,7 @@ import AdminDivision from '../src/models/AdminDivision.js';
 import User from '../src/models/User.js';
 import { VIETNAM_34_DIVISIONS } from '../src/data/vietnam34Provinces.js';
 import { runScheduledJobs } from '../src/services/schedulerService.js';
+import { sendVerificationEmail } from '../src/services/emailService.js';
 
 const TEST_URI = process.env.TEST_MONGODB_URI || 'mongodb://localhost:27017/canho_com_test';
 
@@ -508,4 +509,52 @@ test('canho.com Full Integration: User-Only Email Auth, RoomPhoto MongoDB, Multi
   assert.equal(logsB.status, 200);
   assert.equal(logsB.data.data.length, 1);
   assert.ok(logsB.data.data.every((l) => String(l.tenantId) === String(adminBId)));
+});
+
+test('Resend emailService sends HTML verification link when RESEND_API_KEY is configured', async () => {
+  const prevKey = process.env.RESEND_API_KEY;
+  const prevFrom = process.env.RESEND_FROM;
+  const prevFetch = global.fetch;
+
+  let capturedUrl = '';
+  let capturedInit = null;
+
+  process.env.RESEND_API_KEY = 're_test_123456';
+  process.env.RESEND_FROM = 'canho.com <no-reply@canho.com>';
+  global.fetch = async (url, init) => {
+    capturedUrl = url;
+    capturedInit = init;
+    return new Response(JSON.stringify({ id: 'email_test_001' }), {
+      status: 200,
+      headers: { 'Content-Type': 'application/json' },
+    });
+  };
+
+  try {
+    const res = await sendVerificationEmail({
+      to: 'khachhang@gmail.com',
+      fullName: 'Nguyễn <Khách>',
+      verificationUrl: 'https://canho.vercel.app/verify-email?token=abc123',
+      expiresMinutes: 30,
+      forceSend: true,
+    });
+
+    assert.equal(res.sent, true);
+    assert.equal(res.provider, 'resend');
+    assert.equal(res.id, 'email_test_001');
+    assert.equal(capturedUrl, 'https://api.resend.com/emails');
+    assert.equal(capturedInit.headers.Authorization, 'Bearer re_test_123456');
+
+    const sentPayload = JSON.parse(capturedInit.body);
+    assert.equal(sentPayload.from, 'canho.com <no-reply@canho.com>');
+    assert.deepEqual(sentPayload.to, ['khachhang@gmail.com']);
+    assert.ok(sentPayload.html.includes('https://canho.vercel.app/verify-email?token=abc123'));
+    assert.ok(sentPayload.html.includes('Nguyễn &lt;Khách&gt;'));
+  } finally {
+    global.fetch = prevFetch;
+    if (prevKey === undefined) delete process.env.RESEND_API_KEY;
+    else process.env.RESEND_API_KEY = prevKey;
+    if (prevFrom === undefined) delete process.env.RESEND_FROM;
+    else process.env.RESEND_FROM = prevFrom;
+  }
 });

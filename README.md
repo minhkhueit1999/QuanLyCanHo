@@ -26,11 +26,13 @@ Hệ thống Web Quản lý Cho thuê & Vận hành Căn hộ theo đặc tả [
    SCHEDULER_INTERVAL_MS=60000
    SEED_ROOM_PHOTOS_DIR=./assets/room-photos
    EMAIL_VERIFY_TTL_MINUTES=30
+   RESEND_API_KEY=
+   RESEND_FROM=canho.com <onboarding@resend.dev>
    ```
    *(Thư mục `server/assets/room-photos` chứa sẵn 6 bức ảnh phòng mẫu; script `db:seed` đọc trực tiếp Buffer ảnh lưu vào collection `room_photos` trong MongoDB và phục vụ qua `GET /api/v1/rooms/photos/:photoId`).*
 2. Cấu hình `client/.env` (mẫu tại `client/.env.example`):
    ```env
-   VITE_API_BASE_URL=http://localhost:5000/api/v1
+   VITE_API_BASE_URL=/api/v1
    ```
 3. Cài đặt dependencies & seed 34 Tỉnh/Thành + 6 ảnh phòng MongoDB + dữ liệu mẫu:
    ```bash

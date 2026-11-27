@@ -4,6 +4,7 @@ import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import User from '../models/User.js';
 import Building from '../models/Building.js';
+import { sendVerificationEmail } from '../services/emailService.js';
 import { AppError, asyncHandler } from '../middlewares/errorHandler.js';
 
 const VERIFY_TTL_MINUTES = Number(process.env.EMAIL_VERIFY_TTL_MINUTES) || 30;
@@ -165,8 +166,16 @@ export const register = asyncHandler(async (req, res) => {
   });
 
   const verificationUrl = buildVerificationUrl(rawToken, normalizedEmail, req);
-  if (process.env.NODE_ENV !== 'test') {
-    console.log(`[Email Verification] ${normalizedEmail} -> ${verificationUrl}`);
+  try {
+    await sendVerificationEmail({
+      to: normalizedEmail,
+      fullName: user.fullName,
+      verificationUrl,
+      expiresMinutes: VERIFY_TTL_MINUTES,
+    });
+  } catch (emailErr) {
+    await User.deleteOne({ _id: user._id });
+    throw emailErr;
   }
 
   res.status(201).json({
@@ -262,15 +271,19 @@ export const resendVerification = asyncHandler(async (req, res) => {
   }
 
   const rawToken = crypto.randomBytes(32).toString('hex');
+  const verificationUrl = buildVerificationUrl(rawToken, normalizedEmail, req);
+
+  await sendVerificationEmail({
+    to: normalizedEmail,
+    fullName: user.fullName,
+    verificationUrl,
+    expiresMinutes: VERIFY_TTL_MINUTES,
+  });
+
   user.verificationTokenHash = hashVerificationToken(rawToken);
   user.verificationExpiresAt = new Date(now.getTime() + VERIFY_TTL_MINUTES * 60 * 1000);
   user.verificationLastSentAt = now;
   await user.save();
-
-  const verificationUrl = buildVerificationUrl(rawToken, normalizedEmail, req);
-  if (process.env.NODE_ENV !== 'test') {
-    console.log(`[Resend Verification] ${normalizedEmail} -> ${verificationUrl}`);
-  }
 
   res.status(200).json({
     success: true,
